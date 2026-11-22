@@ -3,6 +3,7 @@
 from fastapi import FastAPI, HTTPException
 from app.models.schemas import EvaluacionRequest, AudioRequest, PrediccionRiesgoRequest, PrediccionRiesgoResponse, EntrenamientoRequest
 from app.ml.supervised_learning import predecir_riesgo_ml, predecir_riesgo_regla_fija, entrenar_modelos_supervisados
+from app.ml.unsupervised_learning import entrenar_modelos_no_supervisados, analizar_paciente_kmeans_pca
 
 app = FastAPI(title="LumaIA Engine API")
 
@@ -88,6 +89,9 @@ async def entrenar_ia(req: EntrenamientoRequest):
         
         # Entrenamos y obtenemos las métricas del modelo ganador
         resultados = entrenar_modelos_supervisados(datos_dict)
+
+        # Entrenamos No Supervisado (K-Means, PCA)
+        entrenar_modelos_no_supervisados(datos_dict)
         
         return {
             "mensaje": f"Modelos evaluados exitosamente. El ganador fue {resultados['algoritmo']}.", 
@@ -114,13 +118,20 @@ async def predecir_riesgo_abandono(req: PrediccionRiesgoRequest):
             req.alertas_sos
         )
 
+        # Obtenemos el perfil y las coordenadas PCA
+        resultado_no_sup = analizar_paciente_kmeans_pca(req.retraso_promedio_minutos, req.consultas_sintomas, req.alertas_sos)
+
         # 3. Retornamos la comparación ampliada
         return PrediccionRiesgoResponse(
             riesgo_regla_fija=riesgo_regla,
             riesgo_machine_learning=resultado_ml["tiene_riesgo"],
             exactitud_modelo_ml=resultado_ml["exactitud_modelo"],
             f1_score_ml=resultado_ml["f1_score_modelo"],
-            algoritmo_utilizado=resultado_ml["algoritmo"]
+            algoritmo_utilizado=resultado_ml["algoritmo"],
+            perfil_paciente=resultado_no_sup["perfil_academico"],
+            coordenada_pca_x=resultado_no_sup["pca_x"],
+            coordenada_pca_y=resultado_no_sup["pca_y"],
+            es_comportamiento_atipico=resultado_no_sup["es_anomalia"]
         )
 
     except Exception as e:

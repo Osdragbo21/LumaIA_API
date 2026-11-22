@@ -47,3 +47,7 @@ class PrediccionRiesgoResponse(BaseModel):
     # NUEVOS CAMPOS PARA LA FASE 1
     f1_score_ml: float
     algoritmo_utilizado: str
+    perfil_paciente: str
+    coordenada_pca_x: float
+    coordenada_pca_y: float
+    es_comportamiento_atipico: bool
