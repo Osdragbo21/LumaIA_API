@@ -25,7 +25,16 @@ class EvaluacionRequest(BaseModel):
 class AudioRequest(BaseModel):
     audio_base64: str
 
-# --- NUEVOS ESQUEMAS PARA MACHINE LEARNING ---
+# --- ESQUEMAS PARA MACHINE LEARNING ---
+class PacienteHistorico(BaseModel):
+    retraso_promedio_minutos: float
+    consultas_sintomas: int
+    alertas_sos: int
+    riesgo_abandono: int
+
+class EntrenamientoRequest(BaseModel):
+    datos_historicos: List[PacienteHistorico]
+
 class PrediccionRiesgoRequest(BaseModel):
     retraso_promedio_minutos: float
     consultas_sintomas: int
@@ -35,12 +44,6 @@ class PrediccionRiesgoResponse(BaseModel):
     riesgo_regla_fija: bool
     riesgo_machine_learning: bool
     exactitud_modelo_ml: float
-
-class PacienteHistorico(BaseModel):
-    retraso_promedio_minutos: float
-    consultas_sintomas: int
-    alertas_sos: int
-    riesgo_abandono: int
-
-class EntrenamientoRequest(BaseModel):
-    datos_historicos: List[PacienteHistorico]
+    # NUEVOS CAMPOS PARA LA FASE 1
+    f1_score_ml: float
+    algoritmo_utilizado: str

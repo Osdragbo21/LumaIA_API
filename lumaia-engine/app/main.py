@@ -1,11 +1,8 @@
 # [MOTOR IA] Ruta: app/main.py
 
 from fastapi import FastAPI, HTTPException
-# Importamos los esquemas y la lógica modularizada
-from app.models.schemas import EvaluacionRequest, AudioRequest, PrediccionRiesgoRequest, PrediccionRiesgoResponse
-from app.ml.risk_model import predecir_riesgo_ml, predecir_riesgo_regla_fija
 from app.models.schemas import EvaluacionRequest, AudioRequest, PrediccionRiesgoRequest, PrediccionRiesgoResponse, EntrenamientoRequest
-from app.ml.risk_model import predecir_riesgo_ml, predecir_riesgo_regla_fija, entrenar_modelo_con_datos_reales
+from app.ml.supervised_learning import predecir_riesgo_ml, predecir_riesgo_regla_fija, entrenar_modelos_supervisados
 
 app = FastAPI(title="LumaIA Engine API")
 
@@ -81,44 +78,50 @@ async def transcribir_audio(req: AudioRequest):
 
 
 # =================================================================
-# NUEVO ENDPOINT: MACHINE LEARNING VS REGLAS FIJAS (Práctica Docente)
+# ENDPOINTS DE MACHINE LEARNING
 # =================================================================
+
+@app.post("/entrenar")
+async def entrenar_ia(req: EntrenamientoRequest):
+    try:
+        datos_dict = [paciente.dict() for paciente in req.datos_historicos]
+        
+        # Entrenamos y obtenemos las métricas del modelo ganador
+        resultados = entrenar_modelos_supervisados(datos_dict)
+        
+        return {
+            "mensaje": f"Modelos evaluados exitosamente. El ganador fue {resultados['algoritmo']}.", 
+            "exactitud": resultados['exactitud']
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/predecir-riesgo", response_model=PrediccionRiesgoResponse)
 async def predecir_riesgo_abandono(req: PrediccionRiesgoRequest):
     try:
-        # 1. Predicción con Regla Fija (Lógica Proposicional)
+        # 1. Predicción con Regla Fija
         riesgo_regla = predecir_riesgo_regla_fija(
             req.retraso_promedio_minutos, 
             req.consultas_sintomas, 
             req.alertas_sos
         )
 
-        # 2. Predicción con Machine Learning (Árbol de Decisión)
+        # 2. Predicción con el Mejor Modelo de ML
         resultado_ml = predecir_riesgo_ml(
             req.retraso_promedio_minutos, 
             req.consultas_sintomas, 
             req.alertas_sos
         )
 
-        # 3. Retornamos la comparación para que el Frontend la grafique
+        # 3. Retornamos la comparación ampliada
         return PrediccionRiesgoResponse(
             riesgo_regla_fija=riesgo_regla,
             riesgo_machine_learning=resultado_ml["tiene_riesgo"],
-            exactitud_modelo_ml=resultado_ml["exactitud_modelo"]
+            exactitud_modelo_ml=resultado_ml["exactitud_modelo"],
+            f1_score_ml=resultado_ml["f1_score_modelo"],
+            algoritmo_utilizado=resultado_ml["algoritmo"]
         )
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/entrenar")
-async def entrenar_ia(req: EntrenamientoRequest):
-    try:
-        # Convertimos los objetos Pydantic a diccionarios de Python
-        datos_dict = [paciente.dict() for paciente in req.datos_historicos]
-        
-        # Entrenamos el modelo y obtenemos la exactitud
-        exactitud = entrenar_modelo_con_datos_reales(datos_dict)
-        
-        return {"mensaje": "Modelo entrenado exitosamente con datos de MongoDB.", "exactitud": exactitud}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
