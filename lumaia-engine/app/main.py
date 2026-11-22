@@ -1,32 +1,13 @@
 # [MOTOR IA] Ruta: app/main.py
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
+# Importamos los esquemas y la lógica modularizada
+from app.models.schemas import EvaluacionRequest, AudioRequest, PrediccionRiesgoRequest, PrediccionRiesgoResponse
+from app.ml.risk_model import predecir_riesgo_ml, predecir_riesgo_regla_fija
+from app.models.schemas import EvaluacionRequest, AudioRequest, PrediccionRiesgoRequest, PrediccionRiesgoResponse, EntrenamientoRequest
+from app.ml.risk_model import predecir_riesgo_ml, predecir_riesgo_regla_fija, entrenar_modelo_con_datos_reales
 
 app = FastAPI(title="LumaIA Engine API")
-
-class Medicamento(BaseModel):
-    id: str
-    nombre_farmaco: str
-    horarios_especificos: List[str]
-
-class Cita(BaseModel):
-    titulo_evento: str
-    fecha_hora: datetime
-    ubicacion: Optional[str] = "Sin ubicación"
-
-class EvaluacionRequest(BaseModel):
-    pregunta_id: str
-    medicamentos_activos: List[Medicamento] = []
-    citas: List[Cita] = [] 
-    tomas_hoy_ids: List[str] = []
-    prompt_forzado: Optional[str] = None
-
-# NUEVO: Modelo para recibir el audio
-class AudioRequest(BaseModel):
-    audio_base64: str
 
 @app.post("/evaluar")
 async def evaluar_pregunta(req: EvaluacionRequest):
@@ -57,14 +38,14 @@ async def evaluar_pregunta(req: EvaluacionRequest):
                 respuesta_texto += ". ¡Sigue así con tu tratamiento!"
 
         elif req.pregunta_id == "CITAS_HOY":
-                if not req.citas:
-                    respuesta_texto = "No tienes citas médicas en tu agenda para el día de hoy."
-                else:
-                    respuesta_texto = "Hoy tienes: "
-                    for cita in req.citas:
-                        hora = cita.fecha_hora.strftime("%H:%M")
-                        respuesta_texto += f"{cita.titulo_evento} a las {hora} en {cita.ubicacion}. "
-                        
+             if not req.citas:
+                 respuesta_texto = "No tienes citas médicas en tu agenda para el día de hoy."
+             else:
+                 respuesta_texto = "Hoy tienes: "
+                 for cita in req.citas:
+                     hora = cita.fecha_hora.strftime("%H:%M")
+                     respuesta_texto += f"{cita.titulo_evento} a las {hora} en {cita.ubicacion}. "
+                     
         elif req.pregunta_id == "RESUMEN_DIA":
             if not req.citas:
                 citas_str = "No tienes citas hoy."
@@ -89,18 +70,55 @@ async def evaluar_pregunta(req: EvaluacionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# NUEVO: Endpoint para procesar el dictado de voz
+
 @app.post("/transcribir")
 async def transcribir_audio(req: AudioRequest):
     try:
-        # AQUÍ CONECTARÁS WHISPER EN EL FUTURO.
-        # Ejemplo:
-        # import base64
-        # audio_bytes = base64.b64decode(req.audio_base64)
-        # texto_transcrito = modelo_whisper.transcribe(audio_bytes)
-        
         texto_simulado = "Esta es una transcripción de prueba. El motor de voz está conectado correctamente al backend."
-        
         return {"texto": texto_simulado}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =================================================================
+# NUEVO ENDPOINT: MACHINE LEARNING VS REGLAS FIJAS (Práctica Docente)
+# =================================================================
+@app.post("/predecir-riesgo", response_model=PrediccionRiesgoResponse)
+async def predecir_riesgo_abandono(req: PrediccionRiesgoRequest):
+    try:
+        # 1. Predicción con Regla Fija (Lógica Proposicional)
+        riesgo_regla = predecir_riesgo_regla_fija(
+            req.retraso_promedio_minutos, 
+            req.consultas_sintomas, 
+            req.alertas_sos
+        )
+
+        # 2. Predicción con Machine Learning (Árbol de Decisión)
+        resultado_ml = predecir_riesgo_ml(
+            req.retraso_promedio_minutos, 
+            req.consultas_sintomas, 
+            req.alertas_sos
+        )
+
+        # 3. Retornamos la comparación para que el Frontend la grafique
+        return PrediccionRiesgoResponse(
+            riesgo_regla_fija=riesgo_regla,
+            riesgo_machine_learning=resultado_ml["tiene_riesgo"],
+            exactitud_modelo_ml=resultado_ml["exactitud_modelo"]
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/entrenar")
+async def entrenar_ia(req: EntrenamientoRequest):
+    try:
+        # Convertimos los objetos Pydantic a diccionarios de Python
+        datos_dict = [paciente.dict() for paciente in req.datos_historicos]
+        
+        # Entrenamos el modelo y obtenemos la exactitud
+        exactitud = entrenar_modelo_con_datos_reales(datos_dict)
+        
+        return {"mensaje": "Modelo entrenado exitosamente con datos de MongoDB.", "exactitud": exactitud}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
