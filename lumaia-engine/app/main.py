@@ -83,7 +83,20 @@ async def transcribir_audio(req: AudioRequest):
 # =================================================================
 
 @app.post("/entrenar")
-async def entrenar_ia(req: EntrenamientoRequest):
+async def entrenar_ia():
+    try:
+        # Entrenamos Supervisado (Árboles, KNN) leyendo del CSV
+        resultados = entrenar_modelos_supervisados()
+        
+        # Entrenamos No Supervisado (K-Means, PCA) leyendo del CSV
+        entrenar_modelos_no_supervisados()
+        
+        return {
+            "mensaje": f"Modelos entrenados con Big Data. Ganador: {resultados['algoritmo']}.", 
+            "exactitud": resultados['exactitud']
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     try:
         datos_dict = [paciente.dict() for paciente in req.datos_historicos]
         
